@@ -30,6 +30,7 @@ class Trajectron(object):
                 np.sum([len(entity_dims) for entity_dims in self.state[state_type].values()])
             )
         self.pred_state = self.hyperparams['pred_state']
+        # print(self.pred_state.keys())
 
     def set_environment(self, env):
         self.env = env

@@ -65,3 +65,8 @@ class TemporallyBatchedAdditiveAttention(AdditiveAttention):
         # final_context_vec is of shape (batch, max_time, enc_dim)
 
         return final_context_vec, torch.squeeze(torch.transpose(attention_probs, 1, 2), dim=3)
+
+
+## liu hongjian: modify this function to add a mudule for my own modules.
+##
+##
