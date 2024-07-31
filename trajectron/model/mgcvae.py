@@ -65,6 +65,10 @@ class MultimodalGenerativeCVAE(object):
                            model_if_absent=nn.LSTM(input_size=self.state_length,
                                                    hidden_size=self.hyperparams['enc_rnn_dim_history'],
                                                    batch_first=True))
+        self.add_submodule(self.node_type + '/node_history_encoder',
+                           model_if_absent=GraphEncoder(input_size=self.state_length,
+                                                   hidden_size=self.hyperparams['enc_rnn_dim_history'],
+                                                   batch_first=True))
 
         ###########################
         #   Node Future Encoder   #
