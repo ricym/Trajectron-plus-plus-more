@@ -71,6 +71,10 @@ class DirectedEdge(Edge):
     @staticmethod
     def get_edge_type(n1, n2):
         return '->'.join([n1.type.name, n2.type.name])
+    
+    @staticmethod
+    def get_edge_power(n1, n2):
+        return '->'.join([n1.type.name, n2.type.name]) # can the infuence be powerd by this?
 
 
 class TemporalSceneGraph(object):
@@ -135,10 +139,10 @@ class TemporalSceneGraph(object):
         position_cube = np.full((total_timesteps, N, 2), np.nan)
 
         adj_cube = np.zeros((total_timesteps, N, N), dtype=np.int8)
-        dist_cube = np.zeros((total_timesteps, N, N), dtype=float)
+        dist_cube = np.zeros((total_timesteps, N, N), dtype=np.float64)
 
         node_type_mat = np.zeros((N, N), dtype=np.int8)
-        node_attention_mat = np.zeros((N, N), dtype=float)
+        node_attention_mat = np.zeros((N, N), dtype=np.float64)
 
         for node_idx, node in enumerate(nodes):
             if online:
