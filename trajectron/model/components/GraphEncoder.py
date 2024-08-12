@@ -102,6 +102,7 @@ class GraphHistoryEncoder(nn.Module):
             agent_history = torch.max(history, dim=0)
 
         return history_enc, agent_history
+    
 
 class GraphFutureEncoder(nn.Module):
     def __init__(self, input_size, hidden_size,
@@ -126,3 +127,60 @@ class GraphFutureEncoder(nn.Module):
         ind_p = ind
 
         return graph, ind_p, ind_n
+    
+class GraphFutureDecoder(nn.Module):
+    def __init__(self, args, pos_enc, in_dim=2):
+        super().__init__()
+
+        self.obs_len = args.obs_len
+        self.pred_len = args.pred_len
+        self.pred_dim = args.pred_dim
+
+        self.model_dim = args.tf_model_dim
+        self.ff_dim = args.tf_ff_dim
+        self.nhead = args.tf_nhead
+        self.dropout = args.tf_dropout
+        self.nlayer = args.fd_tf_layer
+
+        self.cross_motion_only = args.cross_motion_only
+
+        self.in_dim = in_dim + args.nz  # args.nz
+        self.out_mlp_dim = args.fd_out_mlp_dim
+
+        self.input_fc = nn.Linear(self.in_dim, self.model_dim)
+
+        decoder_layers = TransformerDecoderLayer(self.model_dim, self.nhead, self.ff_dim,
+                                                 self.dropout, cross_motion_only=self.cross_motion_only)
+        self.tf_decoder = TransformerDecoder(decoder_layers, self.nlayer)
+
+        self.pos_encoder = PositionalEncoding(self.model_dim, self.dropout,
+                                                   concat=pos_enc['pos_concat'], max_a_len=pos_enc['max_agent_len'],
+                                                   use_agent_enc=pos_enc['use_agent_enc'],
+                                                   agent_enc_learn=pos_enc['agent_enc_learn'])
+
+    def forward(self, dec_in, z, sample_num, agent_num, agent_mask,
+                history_enc, agent_enc_shuffle=None, need_weights=False):
+
+        z_in = z.unsqueeze(0).repeat_interleave(self.pred_len, dim=0)  # [N*sn 32] -> [12 N*sample_num 32]
+        z_in = z_in.view(self.pred_len, agent_num, sample_num, z.shape[-1])  # [12 N sample_num 32]
+
+        in_arr = [dec_in, z_in]
+
+        # [12 N sample_num 2] + [12 N sample_num 32] -> [12*N sample_num 34]  34 -> 64
+        dec_in_z = torch.cat(in_arr, dim=-1).reshape([agent_num * 12, sample_num, -1])
+
+        # [N*12 sample_num model_dim] [N*12 sample_num model_dim] [12 N sample_num model_dim] 256
+        tf_in = self.input_fc(dec_in_z.view(-1, dec_in_z.shape[-1])).view(dec_in_z.shape[0], -1, self.model_dim)
+        tf_in_pos = self.pos_encoder(tf_in, num_a=agent_num, agent_enc_shuffle=agent_enc_shuffle)
+        #                              t_offset=self.obs_len - 1 if self.pos_offset else 0)
+        tf_in_pos = tf_in_pos.reshape([self.pred_len, agent_num, sample_num, self.model_dim])
+
+        # [N N] [N N]
+        mem_agent_mask = agent_mask.clone()
+        tgt_agent_mask = agent_mask.clone()
+
+        # [T N sample_num model_dim] []
+        tf_out, attn_weights = self.tf_decoder(tf_in_pos, history_enc, memory_mask=mem_agent_mask, tgt_mask=tgt_agent_mask,
+                                               seq_mask=True, num_agent=agent_num, need_weights=need_weights)
+
+        return tf_out, attn_weights
